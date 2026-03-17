@@ -175,7 +175,7 @@
         <div class="log-entry"><span class="log-time">System</span><span class="log-info">系統核心啟動...</span></div>
     </div>
 
-    <div class="gesture-feedback" id="gesture-feedback">模式: 星形</div>
+    <div class="gesture-feedback" id="gesture-feedback"></div>
     <button id="btn-snapshot">📸 拍攝快照</button>
 
     <video id="video-input" autoplay muted playsinline></video>
@@ -205,9 +205,9 @@
     };
     
     const state = {
-        targetShape: 'sphere', 
+        targetShape: '', 
         handDetected: false,
-        pinchDistance: 0.5,
+        pinchDistance: 0,
         handPosition: { x: 0, y: 0 }, // MediaPipe 0-1 coords
         worldHandPosition: new THREE.Vector3(0, 0, 0), // 3D World coords
         currentColor: new THREE.Color(0x00ffff),
@@ -272,7 +272,7 @@
         colors[i * 3 + 1] = tempColor.g;
         colors[i * 3 + 2] = tempColor.b;
 
-        const s = Math.random();
+        const s = CONFIG.particleSize * (0.5 + Math.random()); // 50%~150% 基礎大小，製造自然變化
         sizes[i] = s;
         originalSizes[i] = s;
     }
@@ -413,6 +413,32 @@
         return {x,y,z};
     }
 
+    // 摩天樓
+    function getPointOnTower() {
+        const h = 12;
+        const w = 2;
+        const face = Math.floor(Math.random() * 3);
+        if (face === 0) {
+            // Front/back walls
+            const x = (Math.random() - 0.5) * w;
+            const y = (Math.random() - 0.5) * h;
+            const z = (Math.random() > 0.5 ? 1 : -1) * w / 2;
+            return { x, y, z };
+        } else if (face === 1) {
+            // Side walls
+            const x = (Math.random() > 0.5 ? 1 : -1) * w / 2;
+            const y = (Math.random() - 0.5) * h;
+            const z = (Math.random() - 0.5) * w;
+            return { x, y, z };
+        } else {
+            // Top and bottom caps
+            const x = (Math.random() - 0.5) * w;
+            const y = (Math.random() > 0.5 ? 1 : -1) * h / 2;
+            const z = (Math.random() - 0.5) * w;
+            return { x, y, z };
+        }
+    }
+
     // 形狀切換器
     function morphToShape(shape) {
         if (state.targetShape === shape) return;
@@ -449,6 +475,7 @@
             else if(shape === 'helix') p = getPointOnHelix();
             else if(shape === 'grid') p = getPointOnGrid();
             else if(shape === 'blackhole') p = getPointOnBlackHole();
+            else if(shape === 'tower') p = getPointOnTower();
             else p = getPointOnSphere();
             
             targetPositions[i*3] = p.x;
@@ -526,11 +553,12 @@
             if (state.handDetected) {
                 const dx = cx - state.worldHandPosition.x;
                 const dy = cy - state.worldHandPosition.y;
-                const dz = cz; // 假設手在 Z=0
+                const dz = cz - state.worldHandPosition.z; // 相對Z距離
                 const distSq = dx*dx + dy*dy + dz*dz;
                 
                 if (distSq < CONFIG.repulsionRadius * CONFIG.repulsionRadius) {
                     const dist = Math.sqrt(distSq);
+                    if (dist < 0.001) continue; // 浮點精度保護，避免除以零
                     const force = (1.0 - dist / CONFIG.repulsionRadius) * CONFIG.repulsionStrength;
                     
                     // 添加隨機擾動讓斥力看起來像能量流
